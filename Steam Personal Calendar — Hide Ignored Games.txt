@@ -1,0 +1,170 @@
+// ==UserScript==
+// @name         Steam Personal Calendar — Hide Ignored Games
+// @namespace    steam-calendar-hide-ignored
+// @version      1.0
+// @description  Убирает игру из Personal Calendar сразу после нажатия "Ignore Game" / "Игнорировать игру" и запоминает список, чтобы игра не появлялась снова.
+// @author       you
+// @match        *://store.steampowered.com/personalcalendar/*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  const STORAGE_KEY = 'steamCalendar_ignoredAppIds';
+
+  // Тексты кнопки на разных языках интерфейса Steam.
+  // При необходимости можно добавить другие локали.
+  const IGNORE_LABELS = new Set(['Ignore Game', 'Игнорировать игру']);
+
+  const MAX_CLIMB_FOR_LABEL = 6; // сколько уровней вверх проверяем, ища кнопку по тексту
+
+  // ---------- Хранилище (GM_* с фоллбеком на localStorage) ----------
+  function hasGM() {
+    return typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  }
+
+  function loadIgnored() {
+    try {
+      const raw = hasGM() ? GM_getValue(STORAGE_KEY, '[]') : (localStorage.getItem(STORAGE_KEY) || '[]');
+      return new Set(JSON.parse(raw));
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function saveIgnored(set) {
+    const raw = JSON.stringify(Array.from(set));
+    if (hasGM()) {
+      GM_setValue(STORAGE_KEY, raw);
+    } else {
+      localStorage.setItem(STORAGE_KEY, raw);
+    }
+  }
+
+  let ignoredAppIds = loadIgnored();
+
+  // ---------- Вспомогательные функции ----------
+
+  // Достаём appid из href вида .../app/1234567/Name?...
+  function extractAppId(href) {
+    if (!href) return null;
+    const m = href.match(/\/app\/(\d+)(?:\/|$|\?)/);
+    return m ? m[1] : null;
+  }
+
+  // Поднимаемся от элемента вверх, пока у родителя ровно один ребёнок.
+  // Это находит "внешнюю карточку" игры в сетке календаря независимо
+  // от того, сколько промежуточных div-обёрток использует Steam.
+  function climbSingleChildWrappers(el) {
+    let node = el;
+    while (
+      node.parentElement &&
+      node.parentElement.children.length === 1 &&
+      node.parentElement !== document.body
+    ) {
+      node = node.parentElement;
+    }
+    return node;
+  }
+
+  // Находим корневой узел карточки-плитки для данного элемента внутри неё.
+  function findTileRoot(el) {
+    // Основной ориентир — контейнер, который Steam помечает так на плитках календаря.
+    const marker = el.closest('[data-key="hover div"]');
+    const startPoint = marker || el;
+    return climbSingleChildWrappers(startPoint);
+  }
+
+  // Проверяем, является ли элемент (или его текст) кнопкой "Ignore Game",
+  // поднимаясь на несколько уровней вверх от места клика.
+  function findIgnoreButton(target) {
+    let node = target;
+    for (let i = 0; i < MAX_CLIMB_FOR_LABEL && node; i++) {
+      if (node.nodeType === 1) {
+        const text = (node.textContent || '').trim();
+        if (IGNORE_LABELS.has(text)) {
+          return node;
+        }
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function hideTile(tile) {
+    if (!tile || tile.dataset.tmIgnoredHidden === '1') return;
+    tile.dataset.tmIgnoredHidden = '1';
+    tile.style.display = 'none';
+  }
+
+  // ---------- Обработка клика по "Ignore Game" ----------
+  document.addEventListener(
+    'click',
+    function (e) {
+      const btn = findIgnoreButton(e.target);
+      if (!btn) return;
+
+      // Ищем ближайшую ссылку на игру, чтобы достать appid.
+      const link = btn.closest('a[href*="/app/"]');
+      const appId = link ? extractAppId(link.href) : null;
+
+      const tile = findTileRoot(btn);
+
+      if (appId) {
+        ignoredAppIds.add(appId);
+        saveIgnored(ignoredAppIds);
+      }
+
+      // Небольшая задержка, чтобы не мешать собственному обработчику Steam
+      // (который отправляет запрос на сервер), но убрать плитку сразу же визуально.
+      hideTile(tile);
+    },
+    true // capture phase — успеваем среагировать даже если попап быстро закроется
+  );
+
+  // ---------- Скрытие уже известных игнорируемых игр (на случай подгрузки новых месяцев) ----------
+  function scanAndHideKnownIgnored() {
+    if (ignoredAppIds.size === 0) return;
+
+    document.querySelectorAll('a[href*="/app/"]').forEach((link) => {
+      const appId = extractAppId(link.href);
+      if (!appId || !ignoredAppIds.has(appId)) return;
+
+      const tile = findTileRoot(link);
+      hideTile(tile);
+    });
+  }
+
+  scanAndHideKnownIgnored();
+
+  // Календарь может подгружать соседние месяцы/недели динамически — следим за DOM.
+  let debounceTimer = null;
+  const observer = new MutationObserver(() => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(scanAndHideKnownIgnored, 250);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // ---------- Утилиты в меню Tampermonkey ----------
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('Steam Calendar: показать список игнорируемых appid', () => {
+      alert(
+        ignoredAppIds.size
+          ? Array.from(ignoredAppIds).join(', ')
+          : 'Список пуст'
+      );
+    });
+
+    GM_registerMenuCommand('Steam Calendar: сбросить список игнорируемых игр', () => {
+      if (confirm('Точно очистить список игнорируемых игр для этого скрипта?')) {
+        ignoredAppIds = new Set();
+        saveIgnored(ignoredAppIds);
+        alert('Список очищен. Обновите страницу.');
+      }
+    });
+  }
+})();
