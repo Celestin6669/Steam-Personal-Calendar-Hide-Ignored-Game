@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Steam Personal Calendar — Hide Ignored Game
 // @namespace    steam-calendar-hide-ignored
-// @version      3.0
+// @version      3.1
 // @description  Hides a game from Personal Calendar as soon as you click "Ignore Game", in any interface language. Stores nothing — Steam itself keeps track of your ignore list.
 // @author       you
 // @match        *://store.steampowered.com/personalcalendar*
