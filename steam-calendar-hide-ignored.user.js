@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Steam Personal Calendar — Hide Ignored Game
 // @namespace    steam-calendar-hide-ignored
-// @version      3.1
-// @description  Hides a game from Personal Calendar as soon as you click "Ignore Game", in any interface language. Stores nothing — Steam itself keeps track of your ignore list.
+// @version      3.2
+// @description  Hides a game from every list of Personal Calendar as soon as you click "Ignore Game", in any interface language. Stores nothing — Steam itself keeps track of your ignore list.
 // @author       you
 // @match        *://store.steampowered.com/personalcalendar*
 // @run-at       document-idle
 // @license      MIT
+// @downloadURL https://update.greasyfork.org/scripts/596046/Steam%20Personal%20Calendar%20%E2%80%94%20Hide%20Ignored%20Game.user.js
+// @updateURL https://update.greasyfork.org/scripts/596046/Steam%20Personal%20Calendar%20%E2%80%94%20Hide%20Ignored%20Game.meta.js
 // ==/UserScript==
 
 (function () {
@@ -38,6 +40,35 @@
     const marker = el.closest('[data-key="hover div"]');
     const startPoint = marker || el;
     return climbSingleChildWrappers(startPoint);
+  }
+
+  // ---------- Finding the same game in every list ----------
+
+  // Extract appid from a URL like .../app/1234567/Game_Name?...
+  function extractAppId(href) {
+    if (!href) return null;
+    const m = href.match(/\/app\/(\d+)(?:\/|$|\?)/);
+    return m ? m[1] : null;
+  }
+
+  // Appid of the game a given element belongs to. The "Ignore Game" button
+  // lives inside an <a> pointing to the game's page; as a fallback we look
+  // for any game link inside the tile.
+  function getAppIdFor(el) {
+    const ancestorLink = el.closest('a[href*="/app/"]');
+    if (ancestorLink) return extractAppId(ancestorLink.href);
+    const innerLink = el.querySelector('a[href*="/app/"]');
+    return innerLink ? extractAppId(innerLink.href) : null;
+  }
+
+  // The same game appears in several lists (e.g. "Released in the last
+  // 7 days" and "Upcoming"), so hide every tile linking to this appid.
+  function hideAllTilesForApp(appId) {
+    document.querySelectorAll('a[href*="/app/"]').forEach(function (link) {
+      if (extractAppId(link.href) === appId) {
+        findTileRoot(link).style.display = 'none';
+      }
+    });
   }
 
   // ---------- Method 1: match by button text (fast, but language-dependent) ----------
@@ -95,8 +126,13 @@
       if (!btn) return;
 
       const tile = findTileRoot(btn);
+      const appId = getAppIdFor(btn) || (tile && getAppIdFor(tile));
+
+      if (appId) {
+        hideAllTilesForApp(appId); // every list at once
+      }
       if (tile) {
-        tile.style.display = 'none';
+        tile.style.display = 'none'; // fallback if no appid was found
       }
     },
     true // capture phase — react even if the popover closes right after the click
