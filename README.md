@@ -2,7 +2,7 @@
 
 Hide ignored games across the Steam Personal Calendar and mark games with a developer AI content disclosure.
 
-**Current version: 3.4**
+**Current version: 3.5**
 
 ## What it does
 
