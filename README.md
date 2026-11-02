@@ -2,7 +2,7 @@
 
 Hide ignored games across the Steam Personal Calendar and mark games with a developer AI content disclosure.
 
-**Current version: 3.3**
+**Current version: 3.4**
 
 ## What it does
 
@@ -10,7 +10,7 @@ On Steam's [Personal Calendar](https://store.steampowered.com/personalcalendar/)
 
 This userscript hides every currently registered card for that game as soon as you click **Ignore Game**. It reapplies the hidden state when Steam replaces or adds cards during the same page visit, including when AI badges are disabled.
 
-It also adds a small red **AI** badge when a game's Steam store page contains a developer **AI Generated Content Disclosure**. Checks happen in the background as cards approach the viewport, with priority given to games currently on screen.
+It also adds a high-contrast **AI** badge when a game's Steam store page contains a developer **AI Generated Content Disclosure**. The default is neon green (`#0ee827`), with bold lettering, a white border, and a dark shadow. Checks happen in the background as cards approach the viewport, with priority given to games currently on screen.
 
 **The badge indicates a Steam disclosure.** The script does not analyze artwork or decide whether a game looks AI-generated. An unmarked game may have no matching disclosure, still be waiting for a check, or have a page the script could not read.
 
@@ -38,7 +38,7 @@ AI results are cached in the browser's `localStorage`:
 | Verified page with no matching disclosure | 1 day |
 | Sign-in page, age gate, error, or unverified response | Not cached as a negative result |
 
-The cache stores app IDs, disclosure flags, and timestamps. The script's own record of games ignored during the visit stays in memory; Steam manages your account's saved ignore list.
+The cache stores app IDs, disclosure flags, and timestamps. Badge color preferences are saved separately in the same browser. The script's own record of games ignored during the visit stays in memory; Steam manages your account's saved ignore list.
 
 ## Mature and restricted games
 
@@ -57,6 +57,10 @@ Use a current browser with [Tampermonkey](https://www.tampermonkey.net/) install
 You can also install from the [Greasy Fork script page](https://greasyfork.org/en/scripts/596046). Check that the published version is the one you want to install.
 
 ## Optional settings
+
+Click the **gear in the top-right corner** of the page to open the compact appearance panel. The live **AI** preview sits in its header, with **Green** and **Red** presets below it. A single row combines the custom color picker and six-digit HEX input. Changes apply to existing badges immediately, without reloading or refetching game pages. Black or white lettering is selected automatically for contrast.
+
+The footer shows **Auto-save** or **Saved**. Your color is stored for this browser and Steam store origin and restored on later visits; it is not synced to your Steam account. Use **Reset** to restore neon green (`#0ee827`). Close the panel with its close button, Escape, or a click outside. The controls follow the page's English/Russian language, retain visible keyboard focus, and provide larger touch targets on touch devices. If browser storage is blocked or a HEX value is invalid, the panel shows an explanatory message.
 
 Edit these constants near the top of the userscript:
 
@@ -82,11 +86,23 @@ Updates use the installed script's configured `@updateURL` and `@downloadURL`. T
 
 ## Changelog
 
+### 3.4 — Compact appearance settings
+
+Update from version 3.3.
+
+- Refined the appearance panel to a compact 248 × 172 px desktop layout, with the live badge preview in the header and the color picker and HEX input on one row.
+- Replaced the larger gear and text-symbol controls with compact SVG icons, while retaining larger touch targets on touch devices.
+- Combined Reset and the Auto-save/Saved status in a short footer, with explanatory messages for invalid colors or unavailable browser storage.
+- Preserved green/red presets, custom colors, automatic text contrast, and existing saved preferences. Appearance changes still apply immediately without extra game-page requests.
+- Kept accessible field labels, visible keyboard focus, Escape/outside-click closing, and layouts that fit narrow or short windows.
+
 ### 3.3 — AI disclosure badges and calendar improvements
 
 Update from version 3.2.
 
-- Added red **AI** badges for games with a developer AI content disclosure on Steam.
+- Added **AI** badges for games with a developer AI content disclosure on Steam.
+- Made badges easier to spot with bold 16 px lettering, a solid background, a white border, and a dark shadow. The default background is neon green (`#0ee827`), with automatic black/white text contrast.
+- Added a top-right settings gear with green/red presets, a custom color picker, HEX entry, a live preview, and reset. Appearance changes are saved locally and applied immediately without extra game-page requests.
 - Added background checks as cards approach the viewport, with priority given to games currently on screen.
 - Added browser caching: 14 days for detected disclosures and 1 day for verified negative results, with expiry checked during use.
 - Added a paced queue with up to 4 simultaneous requests, at least 150 ms between starts, bounded retries, and a 12-second timeout. Transient failures retry after 2 and 4 seconds; Steam rate-limit responses are respected.
